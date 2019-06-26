@@ -6,6 +6,10 @@
 
 using namespace std;
 
+void log(string str) {
+	cout << str << endl;
+}
+
 string ReadStringFromFile(string path) {
 	ifstream in(path);
 	string contents((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
@@ -38,15 +42,14 @@ void compileShader(string shaderPath, int* shader, GLenum type, int* success, st
 //This method loades shaders from path, creates program, link shaders, and delete shaders.
 //Parameters can be modified.
 int getProgram(string vertexShaderPath, string fragmentShaderPath, int* success, string* infoLog) {
-
 	//Load and compile shaders
 	int vertexShader;
 	compileShader(vertexShaderPath, &vertexShader, GL_VERTEX_SHADER, success, infoLog);
-	if (!*success)	return -1;
+	if (success != NULL && !*success)	return -1;
 
 	int fragmentShader;
 	compileShader(fragmentShaderPath, &fragmentShader, GL_FRAGMENT_SHADER, success, infoLog);
-	if (!*success)	return -1;
+	if (success != NULL && !*success)	return -1;
 
 	//Create program and link shaders
 	int program = glCreateProgram();
@@ -89,7 +92,7 @@ void processInput(GLFWwindow *window)
 
 int main()
 {
-	cout << "Starting..." << endl;
+	log("Starting...");
 	glfwInit();														//Inifialize glfw
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);					//Set glfw major version(3)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);					//Set glfw minor version(3)
@@ -100,7 +103,7 @@ int main()
 	GLFWwindow* window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
 	if (window == NULL)
 	{
-		cout << "Failed to create GLFW window" << endl;
+		log("Failed to create GLFW window");
 		glfwTerminate();
 		return -1;
 	}
@@ -111,7 +114,7 @@ int main()
 	//Initialize glad
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
-		cout << "Failed to initialize GLAD" << endl;
+		log("Failed to initialize GLAD");
 		return -1;
 	}
 
@@ -125,24 +128,9 @@ int main()
 	//Define shader
 	//============================================================
 
-	//Define vertex shader
-	int vertexShader;
-	compileShader("vertexShader.glsl", &vertexShader, GL_VERTEX_SHADER, NULL, NULL);
-
-	//Define fragmentShader
-	int fragmentShader;
-	compileShader("fragmentShader.glsl", &fragmentShader, GL_FRAGMENT_SHADER, NULL, NULL);
-
 	//Link shaders with program
 	unsigned int shaderProgram;
-	shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
-
-	//Delete shaders
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
+	shaderProgram = getProgram("vertexShader.glsl", "fragmentShader.glsl", NULL, NULL);
 
 	//============================================================
 	//Define vertex
@@ -193,8 +181,6 @@ int main()
 		//============================================================
 
 		glUseProgram(shaderProgram);
-
-		glUseProgram(shaderProgram);
 		glBindVertexArray(VAO);
 
 		//Primitive types, array start inex, number of vertex(3 for triangles)
@@ -203,7 +189,6 @@ int main()
 		glfwSwapBuffers(window);	//Refresh
 		glfwPollEvents();			//Call callback event functions
 	}
-
 
 	glfwTerminate();
 	return 0;
