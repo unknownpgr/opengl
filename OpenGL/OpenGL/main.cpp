@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <Windows.h>
 
 using namespace std;
 using namespace glm;
@@ -17,6 +18,17 @@ void log(string str) {
 
 const float SCR_WIDTH = 800.f;
 const float SCR_HEIGHT = 600.f;
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+float lastFrame = 0.0f;
+float deltaTime = 0.0f;
+
+float dx = 0;
+float dy = 0;
+float vy = 0;
 
 string ReadStringFromFile(string path) {
 	ifstream in(path);
@@ -92,7 +104,7 @@ void getTexture(string texturePath, GLint type, unsigned int* texture, int* widt
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	unsigned char *data = stbi_load(texturePath.c_str(), width, height, nrChannels, 0);
 	glTexImage2D(GL_TEXTURE_2D, 0, type, *width, *height, 0, type, GL_UNSIGNED_BYTE, data);
@@ -112,6 +124,20 @@ void processInput(GLFWwindow *window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+
+	float cameraSpeed = 2.5f * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		cameraPos += cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		cameraPos -= cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && abs(vy) < 0.01) {
+		log("JUMP");
+		vy += 10;
+	}
 }
 
 
@@ -144,7 +170,7 @@ int main()
 	}
 
 	//Set Viewport
-	glViewport(0, 0, 800, 600);
+	glViewport(0, 0, (int)SCR_WIDTH, (int)SCR_HEIGHT);
 
 	//Add resize callback
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -168,14 +194,47 @@ int main()
 
 	//New vertex
 	float vertices[] = {
-	 0.5f,  0.5f, 0.0f,	  1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
-	 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,
-	-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
-	-0.5f,  0.5f, 0.0f,   0.0f, 0.0f, 0.0f,   0.0f, 1.0f
-	};
-	unsigned int indices[] = {
-		0, 1, 3,
-		1, 2, 3
+			-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+			-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+			 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+			-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+			-0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+			-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+			 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+			-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+			 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+			 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+			-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f, 1.0f
 	};
 
 	//Vertex buffer object
@@ -187,36 +246,32 @@ int main()
 	glGenVertexArrays(1, &VAO);			//Get array
 
 	//Element buffer object
-	unsigned int EBO;
-	glGenBuffers(1, &EBO);
+	//unsigned int EBO;
+	//glGenBuffers(1, &EBO);
 
 	//Initialze code
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);	//Bind buffer
 	glBindVertexArray(VAO);				//Bind array
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 
 	//Position attribute
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(0 * sizeof(float)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(0 * sizeof(float)));
 	glEnableVertexAttribArray(0);
 
-	//Color attribute
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
-
 	//Textrue attribute
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
 
 	//============================================================
 	//Define texture
 	//============================================================
 	unsigned int texture;
 	int width, height, nrChannels;
-	getTexture("texture.jpeg", GL_RGB, &texture, &width, &height, &nrChannels);
+	getTexture("t2.jpeg", GL_RGB, &texture, &width, &height, &nrChannels);
 
 	unsigned int texture2;
 	getTexture("awesomeface.png", GL_RGBA, &texture2, &width, &height, &nrChannels);
@@ -237,8 +292,8 @@ int main()
 	mat4 model = mat4(1.0f);
 	mat4 view = mat4(1.0f);
 	mat4 projection = mat4(1.0f);
-	model = rotate(model, radians(-55.0f), vec3(1.0f, 0.0f, 0.0f));
-	view = translate(view, vec3(0.0f, 0.0f, -3.0f));
+
+	model = rotate(model, radians(0.0f), vec3(1.0f, 0.0f, 0.0f));
 	projection = perspective(radians(45.0f), SCR_WIDTH / SCR_HEIGHT, 0.1f, 100.0f);
 
 	unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -249,42 +304,84 @@ int main()
 	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, value_ptr(view));
 	glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
 
+	glEnable(GL_DEPTH_TEST);
+
+	POINT p;
+	p.x = 0;
+	p.y = 0;
+
+	float yaw = 0;
+	float pitch = 0;
+	float offset = 500;
+
 	while (!glfwWindowShouldClose(window))
 	{
+		GetCursorPos(&p);
+		dx = p.x - offset;
+		dy = offset - p.y;
+		SetCursorPos((int)offset, (int)offset);
+
+		float currentFrame = (float)glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
 		processInput(window);
 
-		//Graphic initialize Process
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);	//Set clear color
-		glClear(GL_COLOR_BUFFER_BIT);			//Clear
-	
-		//Uniform value test
-		float timeValue = (float)glfwGetTime();
-		float sineValue = sin(timeValue) / 2.0f + .5f;
+		vy -= 20 * deltaTime;
+		cameraPos.y += vy * deltaTime;
+		if (cameraPos.y < 0) {
+			cameraPos.y = 0;
+			vy = 0;
+		}
 
-		int uniformValue = glGetUniformLocation(shaderProgram, "color2");
-		glUniform4f(uniformValue, 1.0f, 1.0f, sineValue, sineValue);
-		vertices[0] = sineValue;
+		//Graphic initialize Process
+		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);				//Set clear color
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	//Clear
+
+		//Set view
+		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
+		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, value_ptr(view));
+
+		float sensitivity = 0.05f;
+		dx *= sensitivity;
+		dy *= sensitivity;
+
+		yaw += dx;
+		pitch += dy;
+
+		if (pitch > 89.0f)
+			pitch = 89.0f;
+		if (pitch < -89.0f)
+			pitch = -89.0f;
+
+		glm::vec3 front;
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.y = sin(glm::radians(pitch));
+		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+		cameraFront = glm::normalize(front);
 
 		//Update buffer change
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 		//============================================================
 		//Drawing process
 		//============================================================
 
 		glBindVertexArray(VAO);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
 		//Primitive types, array start inex, number of vertex(3 for triangles)
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		glBindVertexArray(0);
 
 		glfwSwapBuffers(window);	//Refresh
 		glfwPollEvents();			//Call callback event functions
 	}
-	
+
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteBuffers(1, &VBO);
-	glDeleteBuffers(1, &EBO);
+	//glDeleteBuffers(1, &EBO);
 
 	glfwTerminate();
 	return 0;
