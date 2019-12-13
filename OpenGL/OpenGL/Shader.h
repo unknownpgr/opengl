@@ -81,6 +81,9 @@ public:
 	void use() {
 		glUseProgram(ID);
 	}
+	void stop() {
+		glUseProgram(0);
+	}
 
 private:
 	int verbose = false;

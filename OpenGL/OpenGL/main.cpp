@@ -3,22 +3,68 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include "stb_image.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <Windows.h>
 #include "Shader.h"
+#include "stb_image.h"
+#include <chrono>
+#include <windows.h>
+#include "wglext.h"
 
 using namespace std;
 using namespace glm;
+
+//============================================================
+// For debugging
+//============================================================
 
 void log(string str) {
 	cout << str << endl;
 }
 
+int index = 0;
+chrono::time_point<chrono::steady_clock> listTimestamp[100];
+string listTimestampLog[100];
+
+void checkTime(string log) {
+	listTimestamp[index] = chrono::high_resolution_clock::now();
+	listTimestampLog[index] = log;
+	index++;
+	if (index > 99)index = 0;
+}
+
+void listTimeSpent() {
+	chrono::time_point<chrono::steady_clock> bef = listTimestamp[0];
+	for (int i = 0;i < index;i++) {
+		int dt = (int)std::chrono::duration_cast<std::chrono::nanoseconds>(listTimestamp[i] - bef).count();
+		cout << listTimestampLog[i] << "\t" << dt / 1000 << " us" << endl;
+	}
+}
+
+//============================================================
+
 const float SCR_WIDTH = 800.f;
 const float SCR_HEIGHT = 600.f;
+
+bool WGLExtensionSupported(const char *extension_name)
+{
+	// this is pointer to function which returns pointer to string with list of all wgl extensions
+	PFNWGLGETEXTENSIONSSTRINGEXTPROC _wglGetExtensionsStringEXT = NULL;
+
+	// determine pointer to wglGetExtensionsStringEXT function
+	_wglGetExtensionsStringEXT = (PFNWGLGETEXTENSIONSSTRINGEXTPROC)wglGetProcAddress("wglGetExtensionsStringEXT");
+
+	if (strstr(_wglGetExtensionsStringEXT(), extension_name) == NULL)
+	{
+		// string was not found
+		return false;
+	}
+
+	// extension is supported
+	return true;
+}
 
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -34,24 +80,24 @@ float vy = 0;
 //Load image from given file path, create texture, free image.
 unsigned int getTexture(string texturePath, GLint type, unsigned int* width = NULL, unsigned int* height = NULL, unsigned int* channels = NULL) {
 	unsigned int texture;
-	glGenTextures(1, &texture);
+	glGenTextures(1, &texture);				//Generate empty texture
+	glBindTexture(GL_TEXTURE_2D, texture);	//Bind texture to TEXTURE_2D
 
-	glBindTexture(GL_TEXTURE_2D, texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	int w, h, nrChannels;
-	unsigned char *data = stbi_load(texturePath.c_str(), &w, &h, &nrChannels, 0);
-	glTexImage2D(GL_TEXTURE_2D, 0, type, w, h, 0, type, GL_UNSIGNED_BYTE, data);
-	glGenerateMipmap(GL_TEXTURE_2D);
+	int w, h, c;																	//Width, height, channels
+	unsigned char *data = stbi_load(texturePath.c_str(), &w, &h, &c, 0);			//Load image
+	glTexImage2D(GL_TEXTURE_2D, 0, type, w, h, 0, type, GL_UNSIGNED_BYTE, data);	//Assign image
+	glGenerateMipmap(GL_TEXTURE_2D);												//Generate mipmap
 
 	stbi_image_free(data);
 
 	if (width != NULL)*width = w;
 	if (height != NULL)*height = h;
-	if (channels != NULL)*channels = nrChannels;
+	if (channels != NULL)*channels = c;
 
 	return texture;
 }
@@ -75,22 +121,21 @@ void processInput(GLFWwindow *window)
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && abs(vy) < 0.01) vy += 10;
 }
 
-
-int main()
-{
-	log("Starting...");
+//Initializing process
+GLFWwindow* init(int width, int height) {
 	glfwInit();														//Inifialize glfw
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);					//Set glfw major version(3)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);					//Set glfw minor version(3)
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);	//Set profile
+	//glfwWindowHint(GLFW_REFRESH_RATE, 0);							//Set FPS
 
 	//Create window with size and title
-	GLFWwindow* window = glfwCreateWindow((int)SCR_WIDTH, (int)SCR_HEIGHT, "OpenGL", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(width, height, "OpenGL", NULL, NULL);
 	if (window == NULL)
 	{
 		log("Failed to create GLFW window");
 		glfwTerminate();
-		return -1;
+		return NULL;
 	}
 
 	//Set context
@@ -100,11 +145,19 @@ int main()
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		log("Failed to initialize GLAD");
-		return -1;
+		return NULL;
 	}
 
 	//Set Viewport
-	glViewport(0, 0, (int)SCR_WIDTH, (int)SCR_HEIGHT);
+	glViewport(0, 0, width, height);
+	return window;
+}
+
+int main()
+{
+	log("Starting...");
+	GLFWwindow* window = init((int)SCR_WIDTH, (int)SCR_HEIGHT);
+	if (window == NULL) return -1;
 
 	//Add resize callback
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -159,25 +212,23 @@ int main()
 	};
 
 	//Vertex buffer object
-	unsigned int VBO;		//Buffer id
-	glGenBuffers(1, &VBO);	//Get buffer
+	unsigned int VBO;					//Buffer id
+	glGenBuffers(1, &VBO);				//Get buffer
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);	//Bind buffer
 
 	//Veretex array object
 	unsigned int VAO;					//Array id
 	glGenVertexArrays(1, &VAO);			//Get array
+	glBindVertexArray(VAO);				//Bind array
+
+	//Initialze code
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 	//Element buffer object
 	//unsigned int EBO;
 	//glGenBuffers(1, &EBO);
-
-	//Initialze code
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);	//Bind buffer
-	glBindVertexArray(VAO);				//Bind array
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
 	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
 
 	//Position attribute
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(0 * sizeof(float)));
@@ -198,17 +249,17 @@ int main()
 	//Link shaders with program
 
 	Shader shader = Shader("vertexShader.glsl", "fragmentShader.glsl");
-	unsigned int texture1 = getTexture("t2.jpeg", GL_RGB);
+	unsigned int texture1 = getTexture("texture.jpeg", GL_RGB);
 	unsigned int texture2 = getTexture("awesomeface.png", GL_RGBA);
 
 	shader.use();
 	shader.setInt("texture1", 0);
-	shader.setInt("texture2", 1);
+	//shader.setInt("texture2", 1);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture1);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, texture2);
+	//glActiveTexture(GL_TEXTURE1);
+	//glBindTexture(GL_TEXTURE_2D, texture2);
 
 	//============================================================
 	//Define transform
@@ -234,18 +285,38 @@ int main()
 	float offset = 500;
 	SetCursorPos((int)offset, (int)offset);
 
+	//glfwSwapInterval(1);					//Set interval
+	glClearColor(0.2f, 0.2f, 0.2f, 1.0f);	//Set clear color
+
+	//============================================================
+	//Virtual sync
+	//============================================================
+	PFNWGLSWAPINTERVALEXTPROC       wglSwapIntervalEXT = NULL;
+	PFNWGLGETSWAPINTERVALEXTPROC    wglGetSwapIntervalEXT = NULL;
+
+	if (WGLExtensionSupported("WGL_EXT_swap_control"))
+	{
+		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+		wglGetSwapIntervalEXT = (PFNWGLGETSWAPINTERVALEXTPROC)wglGetProcAddress("wglGetSwapIntervalEXT");
+	}
+
+	//Turn on virtual sync
+	if (wglSwapIntervalEXT != NULL) wglSwapIntervalEXT(0);
+
+
 	while (!glfwWindowShouldClose(window))
 	{
 		//============================================================
 		//Movement and rotation
 		//============================================================
 
-		processInput(window);
 
 		//Calculate frame
 		float currentFrame = (float)glfwGetTime();
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
+
+		processInput(window);
 
 		//Calculate mouse movement
 		GetCursorPos(&cursorPosition);
@@ -275,33 +346,55 @@ int main()
 			vy = 0;
 		}
 
-		//Update position and rotation
 		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-		shader.updateMatrix4(modelLoc, model);
-		shader.updateMatrix4(viewLoc, view);
+
+		//============================================================
+		//GPU associated part
+		//============================================================
 
 		//Graphic initialize Process
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);				//Set clear color
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	//Clear
 
+		//Use shader
+		shader.use();
+
+		//Update position and rotation
+
+		//shader.updateMatrix4(modelLoc, model);
+		shader.updateMatrix4(viewLoc, view);
+
 		//Update buffer change
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+		//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 		//============================================================
 		//Drawing process
 		//============================================================
 
 		glBindVertexArray(VAO);
+
+		//Position attribute
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(0 * sizeof(float)));
+		glEnableVertexAttribArray(0);
+
+		//Textrue attribute
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 
+		//Uncommenet here swhen use element buffer object
 		//Primitive types, array start inex, number of vertex(3 for triangles)
 		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-		//Unbind
+		//Release resource
 		glBindVertexArray(0);
+		glDisableVertexAttribArray(0);
+		glDisableVertexAttribArray(1);
 
-		glfwSwapBuffers(window);	//Refresh
-		glfwPollEvents();			//Call callback event functions
+		shader.stop();
+
+		glfwSwapBuffers(window);
+		glfwPollEvents();
 	}
 
 	glDeleteVertexArrays(1, &VAO);
